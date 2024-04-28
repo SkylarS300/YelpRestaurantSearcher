@@ -1,0 +1,110 @@
+import requests
+import json
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+from tabulate import tabulate
+
+# Function to convert address to coordinates
+def get_coordinates(address):
+    geolocator = Nominatim(user_agent="restaurant_search")
+    location = geolocator.geocode(address)
+    if location:
+        return location.latitude, location.longitude
+    else:
+        return None
+
+# Function to calculate distance in blocks
+def calculate_distance_blocks(user_coords, restaurant_coords):
+    distance = geodesic(user_coords, restaurant_coords).miles
+    blocks = int(distance * 20)  # Assuming 1 mile is approximately 20 blocks
+    return blocks
+
+# Function to search for restaurants
+def search_restaurants(api_key, location, food_type, budget, sort_by_distance=False, cuisine_filter=None):
+    user_coords = get_coordinates(location)
+    
+    if user_coords:
+        # Yelp Fusion API endpoint for business search
+        endpoint = "https://api.yelp.com/v3/businesses/search"
+
+        # Set up request headers with your API key
+        headers = {
+            "Authorization": f"Bearer {api_key}"
+        }
+
+        # Set up the parameters for the API request
+        params = {
+            "latitude": user_coords[0],
+            "longitude": user_coords[1],
+            "term": food_type,
+            "price": budget,
+            "radius": 8046  # 5 miles in meters
+        }
+
+        # Sort by distance if specified
+        if sort_by_distance:
+            params["sort_by"] = "distance"
+
+        # Apply cuisine filter if specified
+        if cuisine_filter:
+            params["categories"] = cuisine_filter
+
+        # Send the API request
+        response = requests.get(endpoint, headers=headers, params=params)
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            data = json.loads(response.text)
+            businesses = data.get("businesses", [])
+
+            if businesses:
+                restaurant_data = []
+                for business in businesses:
+                    restaurant_coords = (business['coordinates']['latitude'], business['coordinates']['longitude'])
+                    blocks_away = calculate_distance_blocks(user_coords, restaurant_coords)
+                    restaurant_info = {
+                        "Name": business['name'],
+                        "Address": business['location']['address1'],
+                        "Rating": business['rating'],
+                        "Distance (Blocks)": blocks_away
+                    }
+                    restaurant_data.append(restaurant_info)
+
+                # Sort by distance if specified
+                if sort_by_distance:
+                    restaurant_data.sort(key=lambda x: x["Distance (Blocks)"])
+
+                # Display the restaurant data using tabulate
+                print(tabulate(restaurant_data, headers="keys", tablefmt="fancy_grid"))
+            else:
+                print("No restaurants found matching your criteria.")
+        else:
+            print(f"Error: {response.status_code}. Unable to fetch restaurant data.")
+    else:
+        print("Invalid address. Please enter a valid address.")
+
+if __name__ == "__main__":
+    # Input parameters
+    api_key = "_toYK4r44WqXrtn5XfOIeZQHAW4DqrWXjg5wciNwZA8MjI9EyM1vjVrYWszyZcM7FqiysphAVfp4rMsyr-R6xBLAPK9g81QIeM4APke6fzobUndHwau1dWhbEv_4ZHYx"
+    location = input("Enter your current address: ")
+    food_type = input("Enter the type of food: ")
+    budget = input("Enter your budget (e.g., 1, 2, 3, 4): ")
+    sort_by_distance = input("Sort by distance (yes/no): ").lower() == "yes"
+    cuisine_filter = input("Enter a cuisine filter (e.g., Italian): ").strip()
+
+    # Call the search_restaurants function
+    search_restaurants(api_key, location, food_type, budget, sort_by_distance, cuisine_filter)
+    
+if __name__ == "__main__":
+    # Input parameters
+    api_key = "_toYK4r44WqXrtn5XfOIeZQHAW4DqrWXjg5wciNwZA8MjI9EyM1vjVrYWszyZcM7FqiysphAVfp4rMsyr-R6xBLAPK9g81QIeM4APke6fzobUndHwau1dWhbEv_4ZHYx"
+    location = input("Enter your current address: ")
+    food_type = input("Enter the type of food: ")
+    budget = input("Enter your budget (e.g., 1, 2, 3, 4): ")
+    sort_by_distance = input("Sort by distance (yes/no): ").lower() == "yes"
+    cuisine_filter = input("Enter a cuisine filter (e.g., Italian): ").strip()
+
+    # Call the search_restaurants function
+    search_restaurants(api_key, location, food_type, budget, sort_by_distance, cuisine_filter)
+
+    input("Press Enter to exit...")
